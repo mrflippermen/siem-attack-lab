@@ -10,28 +10,27 @@ KB := http://localhost:5601
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check host up build provision soc attack alerts status logs ps test down clean restart open dashboard web
+.PHONY: help install check host up build provision soc attack alerts status logs ps test down clean restart open dashboard web
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-check: ## Verifica que Docker y Docker Compose v2 esten listos
-	@command -v docker >/dev/null 2>&1 || { \
-	  echo "✗ Docker NO esta instalado (o no esta en el PATH)."; \
-	  echo "  Kali/Debian/Parrot/Ubuntu:"; \
-	  echo "    sudo apt update && sudo apt install -y docker.io docker-compose-v2"; \
-	  echo "    sudo systemctl enable --now docker"; \
-	  echo "    sudo usermod -aG docker \$$USER   # y CIERRA SESION y vuelve a entrar"; \
-	  exit 1; }
-	@docker compose version >/dev/null 2>&1 || { \
-	  echo "✗ Falta el plugin 'docker compose' (v2)."; \
-	  echo "    sudo apt install -y docker-compose-v2"; \
-	  exit 1; }
+install: ## Instala Docker + Compose + make + python3 en cualquier distro Linux
+	@bash install-deps.sh
+
+check: ## Verifica Docker/Compose; si faltan, ofrece instalarlos solo
+	@if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then \
+	  echo "✗ Faltan Docker o el plugin Compose v2."; \
+	  echo ">> Instalando automaticamente con install-deps.sh (cualquier distro) ..."; \
+	  bash install-deps.sh; \
+	fi
+	@command -v docker >/dev/null 2>&1 || { echo "✗ Docker sigue sin estar disponible. Ejecuta 'make install' a mano."; exit 1; }
+	@docker compose version >/dev/null 2>&1 || { echo "✗ 'docker compose' v2 no disponible. Ejecuta 'make install'."; exit 1; }
 	@docker info >/dev/null 2>&1 || { \
 	  echo "✗ No puedo hablar con el demonio de Docker."; \
 	  echo "  Arrancalo:  sudo systemctl enable --now docker"; \
-	  echo "  Permisos :  sudo usermod -aG docker \$$USER  (y reinicia sesion)"; \
+	  echo "  Permisos :  sudo usermod -aG docker \$$USER  (cierra sesion y vuelve), o usa 'newgrp docker'"; \
 	  echo "  O prueba con sudo:  sudo make soc"; \
 	  exit 1; }
 	@echo ">> Docker OK: $$(docker --version)"
