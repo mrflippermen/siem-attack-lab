@@ -1,0 +1,17 @@
+# Salida de herramientas ofensivas (sqlmap, etc.) — no subir
+**/.local/share/sqlmap/
+sqlmap-output/
+*.csv
+
+# Logs y datos temporales
+*.log
+data/
+esdata/
+
+# Basura del SO / editores
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

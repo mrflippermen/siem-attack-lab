@@ -1,0 +1,28 @@
+# =====================================================================
+#  Filebeat: cosecha el log de Apache desde el VOLUMEN COMPARTIDO
+#  y lo envia a Logstash en tiempo real (tail -f gestionado).
+# =====================================================================
+filebeat.inputs:
+  - type: filestream
+    id: apache-access
+    enabled: true
+    paths:
+      - /var/log/apache2/access.log
+    fields:
+      log_type: apache_access
+    fields_under_root: true
+
+  - type: filestream
+    id: apache-error
+    enabled: true
+    paths:
+      - /var/log/apache2/error.log
+    fields:
+      log_type: apache_error
+    fields_under_root: true
+
+# No queremos que filebeat cree sus propios indices: todo pasa por Logstash
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: info

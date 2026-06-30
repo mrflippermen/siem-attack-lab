@@ -1,0 +1,175 @@
+# 🛡️ Laboratorio: Web Vulnerable + SIEM (ELK) + Attacker Box
+
+Entorno **100% dockerizado** para practicar la detección de ataques web mediante
+análisis de logs en tiempo real. Combina un objetivo vulnerable (SQLi + LFI),
+un stack ELK como SIEM, y una caja atacante con herramientas ofensivas.
+
+> ⚠️ **Solo para uso educativo en entorno aislado.** La red `lab-net` no debe
+> exponerse a Internet. Las vulnerabilidades son intencionadas.
+
+---
+
+## 🧱 Arquitectura
+
+```
+                         lab-net (bridge, aislada)
+ ┌──────────┐   HTTP    ┌──────────────┐   SQL    ┌──────────┐
+ │ attacker │ ───────▶  │   web        │ ───────▶ │   db     │
+ │ (kali)   │           │ Apache+PHP   │          │ MySQL 8  │
+ └──────────┘           │ :80 (→8080)  │          └──────────┘
+                        └──────┬───────┘
+                               │ access.log / error.log
+                               ▼  (volumen COMPARTIDO 'weblogs')
+                        ┌──────────────┐
+                        │  filebeat    │  lee el log en tiempo real
+                        └──────┬───────┘
+                               ▼ :5044
+                        ┌──────────────┐  grok + detección de escáneres,
+                        │  logstash    │  firmas SQLi/LFI, geoip, user-agent
+                        └──────┬───────┘
+                               ▼ :9200
+                        ┌──────────────┐      ┌──────────────┐
+                        │elasticsearch │ ◀──▶ │   kibana     │ :5601
+                        └──────────────┘      │  Dashboards  │
+                                              └──────────────┘
+```
+
+| Servicio        | Rol                                   | Puerto host |
+|-----------------|---------------------------------------|-------------|
+| `web`           | Target vulnerable (Apache + PHP)      | 8080        |
+| `db`            | MySQL con la credencial a exfiltrar   | —           |
+| `elasticsearch` | Almacén del SIEM                      | 9200        |
+| `logstash`      | Parseo del log crudo → estructurado   | 5044        |
+| `filebeat`      | Cosecha el log del volumen compartido | —           |
+| `kibana`        | Visualización / dashboards            | 5601        |
+| `attacker`      | nmap, sqlmap, nikto, gobuster, hydra  | —           |
+
+---
+
+## ✅ Requisitos previos (en cualquier Linux)
+
+| Requisito | Cómo comprobarlo | Instalar (Debian/Ubuntu/Parrot/Kali) |
+|-----------|------------------|--------------------------------------|
+| Docker Engine | `docker --version` | `sudo apt install docker.io` |
+| Docker Compose v2 | `docker compose version` | `sudo apt install docker-compose-v2` |
+| make | `make --version` | `sudo apt install make` |
+| python3 | `python3 --version` | viene de serie en casi todas |
+| **RAM** | Elasticsearch necesita ~2 GB libres | mínimo **4 GB** en la máquina |
+
+> 🔑 Tu usuario debe poder usar Docker sin `sudo`:
+> `sudo usermod -aG docker $USER` y **vuelve a iniciar sesión**.
+> El único `sudo` que pide el lab es para `vm.max_map_count` (lo lanza `make soc`).
+
+---
+
+## 🚀 Puesta en marcha (un solo comando)
+
+```bash
+git clone https://github.com/mrflippermen/siem-attack-lab.git
+cd siem-attack-lab
+make soc          # host (sysctl) + up --build + provisiona el SOC  ← todo en uno
+```
+
+La **primera vez** tarda varios minutos (descarga las imágenes de ELK y Kali y
+construye el target). `make soc` deja listo: contenedores arriba, plantilla de
+índice aplicada, data views + saved searches + dashboard importados, y
+**7 reglas de detección activas**.
+
+- **Target vulnerable** → http://localhost:8080
+- **Kibana**            → http://localhost:5601  (espera ~1 min a que cargue)
+
+Equivalente manual (lo que hace `make soc` por dentro):
+```bash
+sudo sysctl -w vm.max_map_count=262144
+docker compose up -d --build
+python3 soc/provision.py
+```
+
+---
+
+## 🎯 Test completo (un comando)
+
+```bash
+make test
+```
+Levanta el SOC, genera tráfico legítimo de fondo, lanza el ataque de 3 fases,
+espera a que las reglas evalúen y muestra el conteo de eventos + el feed de
+alertas. Para sólo atacar: `make attack`. Para ver alertas: `make alerts`.
+
+---
+
+## 🛠️ Comandos del Makefile
+
+| Comando | Acción |
+|---------|--------|
+| `make soc`     | host + up + provision (pipeline completo) |
+| `make test`    | test end-to-end automatizado |
+| `make attack`  | lanza el ataque de 3 fases |
+| `make alerts`  | muestra el feed de alertas del SOC |
+| `make status`  | salud del cluster + conteo de eventos suspicious |
+| `make dashboard` | (re)genera e importa el dashboard de Kibana |
+| `make web`     | abre la web vulnerable en el navegador |
+| `make open`    | abre Kibana en el navegador |
+| `make logs`    | sigue logs de logstash/filebeat |
+| `make provision` | re-aplica plantilla, data views y reglas (idempotente) |
+| `make down`    | detiene (conserva datos) |
+| `make clean`   | detiene y borra volúmenes |
+
+---
+
+## 📊 Kibana
+
+`make soc` ya deja Kibana **auto-configurado**: el data view `weblogs-*`, las
+saved searches del analista y el dashboard **"SOC — Web Attack Monitoring"** se
+importan solos. Solo tienes que abrir http://localhost:5601 y:
+
+1. Menú ☰ → **Analytics → Dashboard** → **"SOC — Web Attack Monitoring"**.
+2. O **Analytics → Discover** con el data view `weblogs-*` para explorar eventos.
+
+> Para re-importar el dashboard a mano: `make dashboard`.
+> Guía paso a paso con capturas: **`docs/06-guia-capturas.md`**.
+
+### Filtros KQL listos para usar
+```text
+tags : "scanner_ua"                      # peticiones de sqlmap/nikto/nmap...
+tags : "sqli_pattern"                    # firmas de inyección SQL
+tags : "lfi_pattern"                     # path traversal / LFI
+response >= 500                          # errores que delatan inyección
+response : 404                           # ráfagas de fuerza bruta de dirs
+clientip : "172.22.0.5"                  # rastrear una IP de origen concreta
+ua.name : "Other" and tags : "suspicious"
+```
+
+---
+
+## 🩺 Solución de problemas
+
+| Síntoma | Causa / Solución |
+|---------|------------------|
+| `elasticsearch` se reinicia o muere | Falta `vm.max_map_count`. Ejecuta `sudo sysctl -w vm.max_map_count=262144` (o `make host`). Para que persista: añade `vm.max_map_count=262144` a `/etc/sysctl.conf`. |
+| `permission denied` al usar docker | Tu usuario no está en el grupo `docker`: `sudo usermod -aG docker $USER` y reinicia sesión. |
+| Kibana no carga (5601) | Tarda ~1 min en arrancar tras `make soc`. Mira `docker compose logs -f kibana`. |
+| No salen eventos en Kibana | Lanza tráfico/ataque primero (`make attack`) y pon el rango de tiempo en *Last 15 minutes*. |
+| Puerto 8080/5601/9200 ocupado | Cambia el mapeo de puertos en `docker-compose.yml` o libera el puerto. |
+| Empezar de cero | `make clean` (borra datos) y luego `make soc`. |
+
+---
+
+## 🧹 Limpieza
+
+```bash
+make clean                  # = docker compose down -v (borra también los datos de ES)
+```
+
+---
+
+## 📚 Documentación
+
+| Capítulo | Archivo |
+|----------|---------|
+| 1. Infraestructura            | `docs/01-infraestructura.md` |
+| 2. El vector de ataque        | `docs/02-vector-de-ataque.md` |
+| 3. Análisis forense (Kibana)  | `docs/03-analisis-forense.md` |
+| 4. Conclusión                 | `docs/04-conclusion.md` |
+| 5. SOC: detección y alerting  | `docs/05-soc-alerting.md` |
+| 6. Guía paso a paso para capturas | `docs/06-guia-capturas.md` |
