@@ -10,26 +10,46 @@ KB := http://localhost:5601
 
 .DEFAULT_GOAL := help
 
-.PHONY: help host up build provision soc attack alerts status logs ps test down clean restart open dashboard web
+.PHONY: help check host up build provision soc attack alerts status logs ps test down clean restart open dashboard web
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
+check: ## Verifica que Docker y Docker Compose v2 esten listos
+	@command -v docker >/dev/null 2>&1 || { \
+	  echo "✗ Docker NO esta instalado (o no esta en el PATH)."; \
+	  echo "  Kali/Debian/Parrot/Ubuntu:"; \
+	  echo "    sudo apt update && sudo apt install -y docker.io docker-compose-v2"; \
+	  echo "    sudo systemctl enable --now docker"; \
+	  echo "    sudo usermod -aG docker \$$USER   # y CIERRA SESION y vuelve a entrar"; \
+	  exit 1; }
+	@docker compose version >/dev/null 2>&1 || { \
+	  echo "✗ Falta el plugin 'docker compose' (v2)."; \
+	  echo "    sudo apt install -y docker-compose-v2"; \
+	  exit 1; }
+	@docker info >/dev/null 2>&1 || { \
+	  echo "✗ No puedo hablar con el demonio de Docker."; \
+	  echo "  Arrancalo:  sudo systemctl enable --now docker"; \
+	  echo "  Permisos :  sudo usermod -aG docker \$$USER  (y reinicia sesion)"; \
+	  echo "  O prueba con sudo:  sudo make soc"; \
+	  exit 1; }
+	@echo ">> Docker OK: $$(docker --version)"
+
 host: ## Ajusta vm.max_map_count (requisito de Elasticsearch; pide sudo)
 	@echo ">> Configurando vm.max_map_count=262144"
 	@sudo sysctl -w vm.max_map_count=262144
 
-up: ## Levanta todos los contenedores (build incluido)
+up: check ## Levanta todos los contenedores (build incluido)
 	$(DC) up -d --build
 
-build: ## Solo construye las imagenes (web, attacker)
+build: check ## Solo construye las imagenes (web, attacker)
 	$(DC) build
 
 provision: ## Configura el SOC (plantilla, data views, conector, reglas)
 	python3 soc/provision.py
 
-soc: host up provision ## Pipeline completo: host + up + provision
+soc: check host up provision ## Pipeline completo: check + host + up + provision
 	@echo ">> SOC listo. Kibana: $(KB)  | Target: http://localhost:8080"
 
 attack: ## Ejecuta el ataque de 3 fases desde la attacker box

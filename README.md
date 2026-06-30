@@ -56,9 +56,21 @@ un stack ELK como SIEM, y una caja atacante con herramientas ofensivas.
 | python3 | `python3 --version` | viene de serie en casi todas |
 | **RAM** | Elasticsearch necesita ~2 GB libres | mínimo **4 GB** en la máquina |
 
-> 🔑 Tu usuario debe poder usar Docker sin `sudo`:
-> `sudo usermod -aG docker $USER` y **vuelve a iniciar sesión**.
-> El único `sudo` que pide el lab es para `vm.max_map_count` (lo lanza `make soc`).
+### Instalar Docker desde cero (Kali / Debian / Parrot / Ubuntu)
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 make
+sudo systemctl enable --now docker          # arranca el demonio
+sudo usermod -aG docker $USER               # usar docker sin sudo
+#  ⚠️ CIERRA SESIÓN y vuelve a entrar (o reinicia) para aplicar el grupo
+```
+
+Comprueba que todo está listo **antes** de arrancar:
+```bash
+make check        # avisa con instrucciones claras si falta algo
+```
+
+> 🔑 El único `sudo` que pide el lab es para `vm.max_map_count` (lo lanza `make soc`).
+> Si no quieres meter tu usuario en el grupo `docker`, puedes usar `sudo make soc`.
 
 ---
 
@@ -102,7 +114,8 @@ alertas. Para sólo atacar: `make attack`. Para ver alertas: `make alerts`.
 
 | Comando | Acción |
 |---------|--------|
-| `make soc`     | host + up + provision (pipeline completo) |
+| `make check`   | verifica que Docker y Compose estén listos |
+| `make soc`     | check + host + up + provision (pipeline completo) |
 | `make test`    | test end-to-end automatizado |
 | `make attack`  | lanza el ataque de 3 fases |
 | `make alerts`  | muestra el feed de alertas del SOC |
@@ -146,6 +159,8 @@ ua.name : "Other" and tags : "suspicious"
 
 | Síntoma | Causa / Solución |
 |---------|------------------|
+| `make: docker: No such file or directory` (Error 127) | Docker no está instalado. Ejecuta el bloque *"Instalar Docker desde cero"* de arriba y luego `make check`. |
+| `Cannot connect to the Docker daemon` | El servicio no corre o faltan permisos: `sudo systemctl enable --now docker` y `sudo usermod -aG docker $USER` (reinicia sesión), o usa `sudo make soc`. |
 | `elasticsearch` se reinicia o muere | Falta `vm.max_map_count`. Ejecuta `sudo sysctl -w vm.max_map_count=262144` (o `make host`). Para que persista: añade `vm.max_map_count=262144` a `/etc/sysctl.conf`. |
 | `permission denied` al usar docker | Tu usuario no está en el grupo `docker`: `sudo usermod -aG docker $USER` y reinicia sesión. |
 | Kibana no carga (5601) | Tarda ~1 min en arrancar tras `make soc`. Mira `docker compose logs -f kibana`. |
