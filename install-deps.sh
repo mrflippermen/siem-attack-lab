@@ -74,6 +74,7 @@ fi
 # --- arrancar y habilitar el demonio ---
 if command -v systemctl >/dev/null 2>&1; then
   $SUDO systemctl enable --now docker || true
+  $SUDO systemctl start docker 2>/dev/null || true   # fuerza start si ya estaba enable
 elif command -v rc-update >/dev/null 2>&1; then   # OpenRC (Alpine)
   $SUDO rc-update add docker boot || true
   $SUDO service docker start || true
@@ -99,5 +100,9 @@ say "Verificacion final:"
 docker --version || err "docker no quedo instalado"
 docker compose version || err "compose v2 no quedo disponible"
 echo
-printf '\033[33m⚠️  Si te acaban de anadir al grupo docker, CIERRA SESION y vuelve a entrar\n'
-printf '    (o ejecuta:  newgrp docker) antes de  make soc.\033[0m\n'
+if sg docker -c "docker info" >/dev/null 2>&1; then
+  printf '\033[32m✓\033[0m Docker demonio accesible con el grupo docker.\n'
+else
+  printf '\033[33m⚠️  Docker instalado pero el shell actual no tiene el grupo docker.\n'
+  printf '    Makefile lo detectara y usara automaticamente "sg docker".\033[0m\n'
+fi

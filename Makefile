@@ -19,7 +19,7 @@ help: ## Muestra esta ayuda
 install: ## Instala Docker + Compose + make + python3 en cualquier distro Linux
 	@bash install-deps.sh
 
-check: ## Verifica Docker/Compose; si faltan, ofrece instalarlos solo
+check: ## Verifica Docker/Compose; si faltan, los instala solo
 	@if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then \
 	  echo "✗ Faltan Docker o el plugin Compose v2."; \
 	  echo ">> Instalando automaticamente con install-deps.sh (cualquier distro) ..."; \
@@ -28,6 +28,10 @@ check: ## Verifica Docker/Compose; si faltan, ofrece instalarlos solo
 	@command -v docker >/dev/null 2>&1 || { echo "✗ Docker sigue sin estar disponible. Ejecuta 'make install' a mano."; exit 1; }
 	@docker compose version >/dev/null 2>&1 || { echo "✗ 'docker compose' v2 no disponible. Ejecuta 'make install'."; exit 1; }
 	@docker info >/dev/null 2>&1 || { \
+	  if command -v sg >/dev/null 2>&1 && sg docker -c "docker info" >/dev/null 2>&1; then \
+	    echo ">> Permisos docker OK via 'sg docker'. Re-ejecutando make ..."; \
+	    exec sg docker -c "$(MAKE) $(MAKECMDGOALS)"; \
+	  fi; \
 	  echo "✗ No puedo hablar con el demonio de Docker."; \
 	  echo "  Arrancalo:  sudo systemctl enable --now docker"; \
 	  echo "  Permisos :  sudo usermod -aG docker \$$USER  (cierra sesion y vuelve), o usa 'newgrp docker'"; \
