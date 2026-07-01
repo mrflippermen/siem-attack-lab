@@ -8,6 +8,10 @@ sqlmap-output/
 data/
 esdata/
 
+# Informes y evidencias locales — no subir al repo
+*.docx
+screenshots/
+
 # Basura del SO / editores
 .DS_Store
 Thumbs.db
