@@ -1,0 +1,42 @@
+# Secretos del entorno — usar .env.example como plantilla
+.env
+
+# Salida de herramientas ofensivas (sqlmap, etc.) — no subir
+**/.local/share/sqlmap/
+sqlmap-output/
+*.csv
+
+# Logs y datos temporales
+*.log
+data/
+esdata/
+
+# Informes y evidencias locales — no subir al repo
+*.docx
+screenshots/
+drive-download-*/
+*.HEIC
+# Artefactos de compilacion LaTeX del informe pericial
+Informe_Pericial_SIEM.*
+*.aux
+*.lof
+*.lot
+*.toc
+*.out
+*.synctex.gz
+
+# Python
+__pycache__/
+*.pyc
+
+# Webshells subidos durante pruebas locales (no versionar)
+web/src/uploads/*
+!web/src/uploads/index.html
+
+# Basura del SO / editores
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

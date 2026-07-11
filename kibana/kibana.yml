@@ -1,0 +1,15 @@
+server.host: "0.0.0.0"
+server.name: "soc-lab-kibana"
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+
+# --- Claves de cifrado: necesarias para Alerting/Connectors ---
+# (>= 32 caracteres). En un lab pueden ser fijas; cámbialas en produccion.
+xpack.encryptedSavedObjects.encryptionKey: "soc_lab_encsavedobjects_key_0123456789ab"
+xpack.security.encryptionKey:               "soc_lab_security_key_0123456789abcdefgh"
+xpack.reporting.encryptionKey:              "soc_lab_reporting_key_0123456789abcdefg"
+
+# --- Conectores de acciones: permitir todos en el lab ---
+xpack.actions.allowedHosts: ["*"]
+xpack.actions.enabledActionTypes: ["*"]
+
+telemetry.optIn: false

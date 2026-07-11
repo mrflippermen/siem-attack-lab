@@ -1,0 +1,3 @@
+{"attributes":{"fieldAttrs":"{}","title":"weblogs-*","timeFieldName":"@timestamp","name":"weblogs-*"},"id":"weblogs-data-view","references":[],"type":"index-pattern","version":"1"}
+{"attributes":{"fieldAttrs":"{}","title":"soc-alerts","timeFieldName":"@timestamp","name":"soc-alerts (SOC alert feed)"},"id":"soc-alerts-data-view","references":[],"type":"index-pattern","version":"1"}
+{"exportedCount":2,"missingRefCount":0,"missingReferences":[]}

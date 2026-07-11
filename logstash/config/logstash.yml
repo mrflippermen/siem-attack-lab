@@ -1,0 +1,7 @@
+http.host: "0.0.0.0"
+# El monitoreo de stack no es necesario en el lab
+xpack.monitoring.enabled: false
+# IMPORTANTE: Logstash 8.x usa ECS por defecto. Lo desactivamos para que
+# %{COMBINEDAPACHELOG} genere los campos legacy (clientip, agent, request,
+# response...) que usa nuestro pipeline.
+pipeline.ecs_compatibility: disabled

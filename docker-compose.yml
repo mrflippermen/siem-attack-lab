@@ -1,0 +1,151 @@
+# =====================================================================
+#  Laboratorio: Web Vulnerable + SIEM (ELK) + Attacker Box
+#  Red aislada 'lab-net'. NADA de esto debe exponerse a Internet.
+# =====================================================================
+name: siemlab
+
+networks:
+  lab-net:
+    driver: bridge
+
+volumes:
+  esdata:
+  weblogs:        # volumen COMPARTIDO: Apache escribe, Filebeat lee
+
+services:
+
+  # ------------------------------------------------------------------
+  # 1) TARGET VULNERABLE  (Apache + PHP)  ->  escribe access/error log
+  # ------------------------------------------------------------------
+  web:
+    build: ./web
+    container_name: lab-web
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASS: ${MYSQL_PASSWORD}
+    volumes:
+      - weblogs:/var/log/apache2      # <- logs hacia el volumen compartido
+    ports:
+      - "8080:80"                     # http://localhost:8080
+    networks:
+      - lab-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # 2) BASE DE DATOS del target  (contiene la credencial a exfiltrar)
+  # ------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: lab-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_SECRET: ${ADMIN_SECRET}
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - lab-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # 3) ELASTICSEARCH  (almacen del SIEM)
+  # ------------------------------------------------------------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELK_VERSION}
+    container_name: lab-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false        # lab: sin auth para simplicidad
+      - xpack.security.http.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms${ES_JAVA_MEM} -Xmx${ES_JAVA_MEM}"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # 4) LOGSTASH  (parsea el log crudo de Apache -> campos estructurados)
+  # ------------------------------------------------------------------
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${ELK_VERSION}
+    container_name: lab-logstash
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    ports:
+      - "5044:5044"     # entrada Beats
+    networks:
+      - lab-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # 5) FILEBEat  (lee el log del volumen compartido en TIEMPO REAL)
+  # ------------------------------------------------------------------
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:${ELK_VERSION}
+    container_name: lab-filebeat
+    user: root
+    command: ["--strict.perms=false"]
+    depends_on:
+      - logstash
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - weblogs:/var/log/apache2:ro     # <- MISMO volumen, solo lectura
+    networks:
+      - lab-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # 6) KIBANA  (visualizacion / dashboards)
+  # ------------------------------------------------------------------
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ELK_VERSION}
+    container_name: lab-kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    # La configuracion (incl. claves de cifrado para Alerting) va en kibana.yml,
+    # montado abajo. Las env con nombre punteado NO las aplica la imagen.
+    volumes:
+      - ./kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    ports:
+      - "5601:5601"     # http://localhost:5601
+    networks:
+      - lab-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # 7) ATTACKER BOX  (nmap, sqlmap, nikto, gobuster, hydra...)
+  # ------------------------------------------------------------------
+  attacker:
+    build: ./attacker
+    container_name: lab-attacker
+    depends_on:
+      - web
+    networks:
+      - lab-net
+    # se mantiene viva para entrar con: docker compose exec attacker bash
+    tty: true
+    stdin_open: true
+    command: ["sleep", "infinity"]
